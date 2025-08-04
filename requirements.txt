@@ -1,0 +1,7 @@
+openai
+langchain
+langgraph
+streamlit
+pymupdf
+faiss-cpu
+python-docx
