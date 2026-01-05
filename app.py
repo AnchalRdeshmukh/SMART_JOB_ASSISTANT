@@ -1,79 +1,69 @@
-import os
-import json
-from flask import Flask, request, jsonify
-from dotenv import load_dotenv
-import google.generativeai as genai
+import streamlit as st
+from langgraph_app import run_graph
 
-load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=api_key)
+# ---------------- Page Config ----------------
+st.set_page_config(
+    page_title="Smart Job Application Assistant",
+    page_icon="🤖",
+    layout="centered"
+)
 
-model = genai.GenerativeModel("gemini-1.5-pro-latest")
+st.title("🤖 Smart Job Application Assistant")
 
-app = Flask(__name__)
+# ---------------- Inputs ----------------
+resume_file = st.file_uploader(
+    "Upload Resume (PDF)",
+    type=["pdf"]
+)
 
-@app.route("/")
-def home():
-    return "Gemini AI Resume Assistant is running!"
+jd_text = st.text_area(
+    "Paste Job Description",
+    height=200
+)
 
-# 1. Resume-Job Matching Score
-@app.route("/match", methods=["POST"])
-def match_resume_to_job():
-    data = request.json
-    resume = data.get("resume", "")
-    job_description = data.get("job_description", "")
+job_role = st.text_input(
+    "Job Role (e.g. Backend Developer)"
+)
 
-    prompt = f"""
-You are an expert HR AI system.
+analyze = st.button("Analyze Job Application")
 
-Compare the following resume and job description and give a semantic match score from 0 to 100, along with a short reason.
+# ---------------- Action ----------------
+if analyze:
+    if resume_file is None:
+        st.warning("Please upload a resume.")
+        st.stop()
 
-Resume:
-{resume}
+    if not jd_text.strip():
+        st.warning("Please paste a job description.")
+        st.stop()
 
-Job Description:
-{job_description}
+    if not job_role.strip():
+        st.warning("Please enter job role.")
+        st.stop()
 
-Respond with JSON like:
-{{
-  "score": 88,
-  "reason": "Strong match in required skills such as Python, data pipelines, and cloud experience."
-}}
-    """
+    # --------- DIRECT TEST (NO LANGGRAPH) ---------
+    from agents.resume_parser import parse_resume
+    from agents.jd_parser import parse_jd
+    from agents.skill_matcher import match_skills
+    from agents.fit_score import calculate_fit
+    from agents.cover_letter import generate_cover_letter
 
-    try:
-        response = model.generate_content(prompt)
-        return jsonify(json.loads(response.text.strip()))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    resume_text = parse_resume(resume_file)
+    jd_clean = parse_jd(jd_text)
 
-# 2. Cover Letter Generation
-@app.route("/cover_letter", methods=["POST"])
-def generate_cover_letter():
-    data = request.json
-    resume = data.get("resume", "")
-    job_description = data.get("job_description", "")
-    name = data.get("name", "Candidate")
+    matched, jd_skills = match_skills(resume_text, jd_clean)
+    fit_score = calculate_fit(matched, jd_skills)
 
-    prompt = f"""
-Generate a professional and tailored cover letter for the following person applying to the given job.
+    cover_letter = generate_cover_letter(job_role, matched)
 
-Name: {name}
+    st.success("Analysis Completed!")
 
-Resume:
-{resume}
+    st.subheader("📊 Job Fit Score")
+    st.progress(fit_score / 100)
+    st.write(f"{fit_score}% Match")
 
-Job Description:
-{job_description}
+    st.subheader("🧠 Matched Skills")
+    st.write(matched)
 
-Format the letter properly and make it compelling. Avoid repetition and generic language.
-    """
-
-    try:
-        response = model.generate_content(prompt)
-        return jsonify({"cover_letter": response.text.strip()})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    st.subheader("📝 AI Generated Cover Letter")
+    st.write(cover_letter)

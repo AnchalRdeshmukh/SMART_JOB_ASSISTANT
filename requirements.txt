@@ -1,7 +1,7 @@
-openai
-langchain
-langgraph
 streamlit
+langgraph
+langchain
+google-genai
 pymupdf
-faiss-cpu
-python-docx
+python-dotenv
+scikit-learn

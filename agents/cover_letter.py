@@ -1,11 +1,26 @@
-from utils.constants import COVER_LETTER_TEMPLATE
+import os
+from dotenv import load_dotenv
+from google import genai
 
-def generate_cover_letter(candidate, company, role, skills, hiring_manager="Hiring Manager"):
-    return COVER_LETTER_TEMPLATE.format(
-        candidate=candidate,
-        company=company,
-        role=role,
-        skills=", ".join(skills),
-        hiring_manager=hiring_manager
+load_dotenv()
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+def generate_cover_letter(role, skills):
+    skills_text = ", ".join(skills) if skills else "relevant technical skills"
+
+    prompt = f"""
+    Write a professional cover letter for the role of {role}.
+
+    Candidate skills:
+    {skills_text}
+
+    Keep the tone professional and concise.
+    """
+
+    response = client.models.generate_content(
+        model="models/gemini-flash-latest",
+        contents=prompt
     )
 
+    return response.text

@@ -1,80 +1,75 @@
-# langgraph_app.py
-
 from langgraph.graph import StateGraph, END
-from agents.jd_parser import parse_job_description
+
 from agents.resume_parser import parse_resume
+from agents.jd_parser import parse_jd
 from agents.skill_matcher import match_skills
-from agents.fit_score import calculate_fit_score
+from agents.fit_score import calculate_fit
+from agents.cover_letter import generate_cover_letter
 
-# 1. Define a state structure
-state = {
-    "resume": None,
-    "jd": None,
-    "parsed_resume": None,
-    "parsed_jd": None,
-    "matched_skills": None,
-    "fit_score": None,
-}
 
-# 2. Define each node as a function
+class State(dict):
+    pass
 
-def load_resume(state):
-    with open("sample_resume.txt", "r", encoding="utf-8") as f:
-        resume_text = f.read()
-    state["resume"] = resume_text
+
+def resume_agent(state):
+    resume_file = state.get("resume_file")
+    state["resume_text"] = parse_resume(resume_file) if resume_file else ""
     return state
 
-def load_jd(state):
-    with open("sample_jd.txt", "r", encoding="utf-8") as f:
-        jd_text = f.read()
-    state["jd"] = jd_text
+
+def jd_agent(state):
+    jd_raw = state.get("jd_text_raw", "")
+    state["jd_text"] = parse_jd(jd_raw) if jd_raw else ""
     return state
 
-def run_resume_parser(state):
-    parsed = parse_resume(state["resume"])
-    state["parsed_resume"] = parsed
+
+def skill_agent(state):
+    matched, jd_skills = match_skills(
+        state.get("resume_text", ""),
+        state.get("jd_text", "")
+    )
+    state["matched"] = matched
+    state["jd_skills"] = jd_skills
     return state
 
-def run_jd_parser(state):
-    parsed = parse_job_description(state["jd"])
-    state["parsed_jd"] = parsed
+
+def score_agent(state):
+    state["fit_score"] = calculate_fit(
+        state.get("matched", []),
+        state.get("jd_skills", [])
+    )
     return state
 
-def run_skill_matcher(state):
-    matched = match_skills(state["parsed_resume"], state["parsed_jd"])
-    state["matched_skills"] = matched
+
+def cover_agent(state):
+    role = state.get("job_role", "")
+    matched = state.get("matched", [])
+    state["cover_letter"] = (
+        generate_cover_letter(role, matched)
+        if role and matched
+        else "Not enough data to generate cover letter."
+    )
     return state
 
-def run_fit_score(state):
-    score = calculate_fit_score(state["matched_skills"])
-    state["fit_score"] = score
-    return state
 
-# 3. Build LangGraph
-builder = StateGraph(state)
+graph = StateGraph(State)
 
-builder.add_node("load_resume", load_resume)
-builder.add_node("load_jd", load_jd)
-builder.add_node("parse_resume", run_resume_parser)
-builder.add_node("parse_jd", run_jd_parser)
-builder.add_node("match_skills", run_skill_matcher)
-builder.add_node("fit_score", run_fit_score)
+graph.add_node("resume", resume_agent)
+graph.add_node("jd", jd_agent)
+graph.add_node("skills", skill_agent)
+graph.add_node("score", score_agent)
+graph.add_node("cover", cover_agent)
 
-# Connect nodes step-by-step
-builder.set_entry_point("load_resume")
-builder.add_edge("load_resume", "load_jd")
-builder.add_edge("load_jd", "parse_resume")
-builder.add_edge("parse_resume", "parse_jd")
-builder.add_edge("parse_jd", "match_skills")
-builder.add_edge("match_skills", "fit_score")
-builder.add_edge("fit_score", END)
+graph.set_entry_point("resume")
 
-# Compile the graph
-graph = builder.compile()
+graph.add_edge("resume", "jd")
+graph.add_edge("jd", "skills")
+graph.add_edge("skills", "score")
+graph.add_edge("score", "cover")
+graph.add_edge("cover", END)   # ✅ FINAL STATE
 
-# 4. Run the graph
-final_output = graph.invoke({})
+app = graph.compile()
 
-# 5. Print the final score
-print("\n✅ Final Fit Score:")
-print(final_output["fit_score"])
+
+def run_graph(input_state: dict):
+    return app.invoke(input_state)

@@ -1,12 +1,23 @@
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from pathlib import Path
 
-load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Force load .env from project root
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
-models = genai.list_models()
+api_key = os.getenv("GEMINI_API_KEY")
+print("API KEY FOUND:", bool(api_key))
 
-print("Available Models:")
-for model in models:
-    print(f"- {model.name} → {model.supported_generation_methods}")
+if not api_key:
+    raise RuntimeError("GEMINI_API_KEY not loaded. Check .env file location.")
+
+client = genai.Client(api_key=api_key)
+
+models = client.models.list()
+
+for m in models:
+    print(m.name)
+
+

@@ -1,8 +1,9 @@
-def extract_keywords(text):
-    return set(word.lower() for word in text.split() if len(word) > 3)
+from utils.constants import SKILLS
 
 def match_skills(resume_text, jd_text):
-    resume_keywords = extract_keywords(resume_text)
-    jd_keywords = extract_keywords(jd_text)
-    matched_skills = resume_keywords.intersection(jd_keywords)
-    return list(matched_skills)
+    resume_skills = [s for s in SKILLS if s in resume_text]
+    jd_skills = [s for s in SKILLS if s in jd_text]
+
+    matched = list(set(resume_skills) & set(jd_skills))
+
+    return matched, jd_skills
